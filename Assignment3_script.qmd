@@ -1,0 +1,179 @@
+---
+title: "Assignment 3"
+author: "Christina Treacy"
+format: pdf
+editor: visual
+date: May 14, 2026
+---
+
+```{r}
+library(tidyverse)
+library(here)
+library(ggplot2)
+```
+
+## Part 1: Building the Dataset
+
+```{r}
+# Set seed so the random data is reproducible
+set.seed(123)
+
+# Create day column
+day <- 1:365
+
+# Create made-up daily PM2.5 values
+# Using rnorm with mean = 15 and sd = 8 gives mostly realistic urban values
+# pmax() prevents negative PM2.5 values
+pm25 <- pmax(rnorm(365, mean = 15, sd = 8), 0)
+
+# Create empty season column
+season <- rep(NA, 365)
+
+# Assign seasons based on day number
+season[day >= 1 & day <= 90] <- "winter"
+season[day >= 91 & day <= 180] <- "spring"
+season[day >= 181 & day <= 270] <- "summer"
+season[day >= 271 & day <= 365] <- "fall"
+
+# Convert season to a factor with correct levels
+season <- factor(season, 
+                 levels = c("winter", "spring", "summer", "fall"))
+
+# Create empty risk column for Part 2
+risk <- rep(NA, 365)
+
+# Combine into one data frame
+air_quality <- data.frame(day, pm25, season, risk)
+
+# View the first few rows
+head(air_quality)
+
+# Save the data frame as a CSV
+write.csv(air_quality, "air_quality.csv")
+```
+
+## Part 2: Classify Risk with a For Loop
+I used rnorm() to simulate daily PM2.5 concentrations with a mean of 15 µg/m³ and standard deviation of 8 µg/m³. This creates mostly low-to-moderate daily values with occasional higher pollution days, which is reasonable for an urban monitoring station. Negative values were replaced with 0 using pmax() because PM2.5 concentrations cannot be negative.
+
+```{r}
+# Create variables to track unhealthy streaks
+current_unhealthy_streak <- 0
+max_unhealthy_streak <- 0
+
+# Use a for loop to classify each day
+for (i in 1:nrow(air_quality)) {
+  
+  # Classify PM2.5 risk level
+  if (air_quality$pm25[i] < 12) {
+    air_quality$risk[i] <- "good"
+    
+  } else if (air_quality$pm25[i] <= 35.4) {
+    air_quality$risk[i] <- "moderate"
+    
+  } else {
+    air_quality$risk[i] <- "unhealthy"
+  }
+  
+  # Track consecutive unhealthy days
+  if (air_quality$risk[i] == "unhealthy") {
+    current_unhealthy_streak <- current_unhealthy_streak + 1
+    
+    if (current_unhealthy_streak > max_unhealthy_streak) {
+      max_unhealthy_streak <- current_unhealthy_streak
+    }
+    
+  } else {
+    current_unhealthy_streak <- 0
+  }
+}
+```
+
+## Part 3: Seasonal Summary with a For Loop
+This loop goes through each season and counts how many days were classified as “unhealthy.” The results are stored in a summary data frame, which makes it easier to compare seasonal differences in high PM2.5 risk.
+
+```{r}
+# Create a vector with the season names
+season_names <- c("winter", "spring", "summer", "fall")
+
+# Create an empty vector to store the number of unhealthy days per season
+unhealthy_counts <- rep(0, length(season_names))
+
+# Name each position in the vector
+names(unhealthy_counts) <- season_names
+
+# Use a for loop to count unhealthy days in each season
+for (i in 1:length(season_names)) {
+  
+  current_season <- season_names[i]
+  
+  unhealthy_counts[i] <- sum(
+    air_quality$season == current_season & 
+      air_quality$risk == "unhealthy")
+}
+
+# View the result
+unhealthy_counts
+
+# Convert seasonal unhealthy counts into a data frame
+seasonal_unhealthy_summary <- data.frame(
+  season = names(unhealthy_counts),
+  unhealthy_days = as.numeric(unhealthy_counts))
+
+# View summary table
+seasonal_unhealthy_summary
+```
+
+## Part 4: Visualize and Report
+
+### Plot 1: PM2.5 across the year, colored by season
+This shows how PM2.5 changes over the simulated year and makes it easy to see whether certain seasons have higher pollution.
+
+```{r}
+# Create title using sprintf
+pm25_title <- sprintf("Daily PM2.5 Across the Year:
+Longest Unhealthy Streak = %s Day", max_unhealthy_streak)
+
+# Time series plot of PM2.5
+ggplot(air_quality, aes(x = day, y = pm25, color = season)) +
+  geom_point() +
+  geom_line(alpha = 0.4) +
+  labs(title = pm25_title,
+    x = "Day of Year",
+    y = "PM2.5 Concentration (µg/m³)",
+    color = "Season") +
+  scale_color_manual(values = c(
+      "winter" = "skyblue3",
+      "spring" = "darkseagreen",
+      "summer" = "hotpink3",
+      "fall" = "darkorange2")) +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Plot 2: Count of days in each risk category
+
+```{r}
+# Create title using sprintf
+risk_title <- sprintf("Number of Days by PM2.5 Risk Category: 
+Longest Unhealthy Streak = %s Day", max_unhealthy_streak)
+
+# Make sure risk categories are ordered
+air_quality$risk <- factor(air_quality$risk,
+  levels = c("good", "moderate", "unhealthy"))
+
+# Bar chart of risk category counts
+ggplot(air_quality, aes(x = risk, fill = risk)) +
+  geom_bar() +
+  labs(title = risk_title,
+    x = "Risk Category",
+    y = "Number of Days", 
+    fill = "Risk Category")+
+  scale_fill_manual(values = c(
+      "good" = "darkseagreen3",
+      "moderate" = "goldenrod2",
+      "unhealthy" = "firebrick3")) +
+  theme_minimal()+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The simulated air quality data show that most days fell into the good or moderate PM2.5 risk categories, with a smaller number of unhealthy days. The longest consecutive unhealthy streak was only 1 day, suggesting that high-pollution episodes were relatively limited but could still create short-term public health concerns. Seasonal patterns also show that unhealthy days were not evenly distributed across the year, which may indicate that certain seasonal conditions are more favorable for PM2.5 buildup. From a management perspective, even brief unhealthy streaks are important because they can increase exposure risks for sensitive groups, including children, older adults, and people with respiratory conditions. Public health agencies could use this type of monitoring summary to target alerts, reduce outdoor exposure during high-risk days, and evaluate whether seasonal pollution-control strategies are needed.
