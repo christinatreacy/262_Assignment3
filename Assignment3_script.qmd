@@ -86,6 +86,14 @@ for (i in 1:nrow(air_quality)) {
     current_unhealthy_streak <- 0
   }
 }
+
+# Save updated data frame with filled-in risk column
+write.csv(air_quality, "air_quality_with_risk.csv", row.names = FALSE)
+
+# Check results
+head(air_quality)
+table(air_quality$risk)
+max_unhealthy_streak
 ```
 
 ## Part 3: Seasonal Summary with a For Loop
